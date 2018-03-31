@@ -489,13 +489,15 @@ int main(int argc, char *argv[]) {
 					double *mrVec = movieRatingVectors[movieId - 1][movieRating - 1];
 
 					//Calculate pbar for the user and movie rating
-					double userPBar = (double) userCounts[userId] / totalUsers;
-					double mrPBar = (double) movieRatingCounts[movieId][movieRating] / (totalMovies * MAX_STARS);
+					double userPBar = (double) userCounts[userId - 1] / numDataPoints;
+					double mrPBar = (double) movieRatingCounts[movieId - 1][movieRating - 1] / numDataPoints;
 
 					double likelihood = userPBar * mrPBar * exp(-getDistanceSquared(userVec, mrVec, dimensions)) / z;
-					
-					cout << "Likelihood: " << likelihood << endl;
+					likelihoodAvg += likelihood;
 				}
+
+				likelihoodAvg /= AVERAGE_SAMPLE_SIZE;
+				cout << "Likelihood: " << likelihoodAvg << endl;
 			}
 		}
 
