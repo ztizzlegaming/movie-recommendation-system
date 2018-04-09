@@ -17,7 +17,7 @@ First, clone this repository using the following code:
 ```
 git clone https://github.com/ztizzlegaming/netflix-prize
 ```
-One must also have the Netflix Prize dataset, which can be found [http](here). For ease, put this file in the same netflix-prize folder.
+One must also have the Netflix Prize dataset, which can be found [here](https://www.dropbox.com/s/32jbztb1evu3lk3/netflix_data_c.bin?dl=0). For ease, put this file in the same netflix-prize folder.
 
 To compile the code, use the following command and replace main_base.cpp with whatever version you want to use (main_base.cpp, main_mr_mr_repel.cpp, main_average.cpp):
 ```
