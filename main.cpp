@@ -49,6 +49,7 @@ struct Settings {
 	int iterations;
 	int zSampleSize;
 	int scoreSampleSize;
+	int repelNum;
 };
 
 //Struct to hold data read from binary file
@@ -119,17 +120,17 @@ double getDistanceSquared(double *a, double *b, int dimensions);
 double norm2(double *arr, int length);
 double calculateEta(double etaInitial, double phi, int count);
 void moveVectors(
-	double *user,
-	double *mr,
+	double* user,
+	double* mr,
 	double movieRating,
-	double **movieRatingsArr,
 	double etaInitial,
 	double userEta,
 	double mrEta,
-	double *randomUser1,
-	double *randomUser2,
-	double *randomMR1,
-	double *randomMR2,
+	double** userVectorsRepel,
+	double** mrVectorsRepel,
+	int numRepel,
+	double* randomUser,
+	double* randomMR,
 	int dimensions,
 	double z);
 double attract(double a, double b, double eta);
@@ -144,6 +145,13 @@ double calculateRMSE(
 	double*** movieRatingVectors,
 	int** movieRatingCounts,
 	int dimensions);
+void writeBarGraphValues(
+	int** data,
+	double** userVectors,
+	double*** movieRatingVectors,
+	int** movieRatingCounts,
+	int dimensions,
+	int barGraphIndices[]);
 
 const int NUM_PARTS = 3; //How many parts are there to each triple? 3 - user id, movie id, rating
 const int USER_ID_IDX = 0; //The index of the user id in the array storing the triple
@@ -169,6 +177,8 @@ const double TEST_SIZE = 1 - TRAIN_SIZE - VALIDATION_SIZE;
 //number of iterations
 //z sample size
 //score sample size
+
+const int BAR_GRAPH_COUNT = 1;
 
 int main(int argc, char *argv[]) {
 	//Seed general random number generator
@@ -242,6 +252,43 @@ int main(int argc, char *argv[]) {
 	int* testIndices = datasets.testIndices;
 	int testSize = datasets.testSize;
 
+	//Pick a few of the validation points to look at the bar graph for
+	//For now randomly select them. Later pick user and movie combinations
+	//that appear more often.
+	random_shuffle(&validationIndices[0], &validationIndices[validationSize - 1]);
+	int barGraphIndices[BAR_GRAPH_COUNT];
+	for (int i1 = 0; i1 < BAR_GRAPH_COUNT; i1++) {
+		int idx = validationIndices[i1];
+		barGraphIndices[i1] = idx;
+
+		//Calculate the probability of giving each rating based on the empirical probabilities
+		int* dataPt = data[idx];
+		int userId = dataPt[USER_ID_IDX];
+		int movieId = dataPt[MOVIE_ID_IDX];
+		int movieRating = dataPt[MOVIE_RATING_IDX];
+
+		//Initialize output file for empirical probabilities
+		ofstream file;
+		string name = "empirical_" + to_string(i1 + 1) + "_movieid=" + to_string(movieId) + ".csv";
+		file.open(name);
+
+		double sum = 0;
+		for (int star = 0; star < MAX_STARS; star++) {
+			int c = movieRatingCounts[movieId - 1][star];
+			sum += c;
+		}
+
+		for (int star = 0; star < MAX_STARS; star++) {
+			double p = movieRatingCounts[movieId - 1][star] / sum;
+
+			file << p;
+			if (star != MAX_STARS - 1) {
+				file << ",";
+			}
+		}
+		file.close();
+	}
+
 	//Init random data point generator from training set
 	mt19937 random(time(0));
 	uniform_int_distribution<int> randomDataPoint(0, trainSize - 1);
@@ -287,7 +334,7 @@ int main(int argc, char *argv[]) {
 		//Go through each data point in the training set
 		for (int dataIdx = 0; dataIdx < trainSize; dataIdx++) {
 			int idx = trainIndices[dataIdx];
-			int *dataPt = data[idx];
+			int* dataPt = data[idx];
 
 			//Get the user id, movie id, and movie rating from the data point
 			int userId = dataPt[USER_ID_IDX];
@@ -299,59 +346,81 @@ int main(int argc, char *argv[]) {
 			movieRatingCumulativeCounts[movieId - 1][movieRating - 1]++;
 
 			//Get the vectors and calculate eta for the user and movie rating vectors
-			double *userVec = userVectors[userId - 1];
+			double* userVec = userVectors[userId - 1];
 			double userEta = calculateEta(settings.eta, settings.phiUser, userCumulativeCounts[userId - 1]);
 
-			double *movieRatingVec = movieRatingVectors[movieId - 1][movieRating - 1];
+			double* movieRatingVec = movieRatingVectors[movieId - 1][movieRating - 1];
 			double mrEta = calculateEta(settings.eta, settings.phiMR, movieRatingCumulativeCounts[movieId - 1][movieRating - 1]);
 
-			//Get random new vectors to update z with
+			double** userVectorsRepel = new double*[settings.repelNum];
+			double** mrVectorsRepel = new double*[settings.repelNum];
+
+			//Get small sample of vectors to repel from
+			for (int i1 = 0; i1 < settings.repelNum; i1++) {
+				//Get a user vector
+				int idxTemp = randomDataPoint(random);
+				int* dataPtTemp = data[trainIndices[idxTemp]];
+				int userIdTemp = dataPtTemp[USER_ID_IDX];
+				double* userVecTemp = userVectors[userIdTemp - 1];
+				userVectorsRepel[i1] = userVecTemp;
+
+				idxTemp = randomDataPoint(random);
+				dataPtTemp = data[trainIndices[idxTemp]];
+				int movieIdTemp = dataPtTemp[MOVIE_ID_IDX];
+				int movieRatingTemp = dataPtTemp[MOVIE_RATING_IDX];
+				double* mrVecTemp = movieRatingVectors[movieIdTemp - 1][movieRatingTemp - 1];
+				mrVectorsRepel[i1] = mrVecTemp;
+			}
+
+			//Get more random vectors for user-user and mr-mr repulsion
 			int randomUserDataIdx = randomDataPoint(random);
 			idx = trainIndices[randomUserDataIdx];
 			dataPt = data[idx];
 			int randomUserId = dataPt[USER_ID_IDX];
-			double *randomUserVec = userVectors[randomUserId - 1];
+			double* randomUserVec = userVectors[randomUserId - 1];
 
 			int randomMRDataIdx = randomDataPoint(random);
 			idx = trainIndices[randomMRDataIdx];
 			dataPt = data[idx];
 			int randomMovieId = dataPt[MOVIE_ID_IDX];
 			int randomMovieRating = dataPt[MOVIE_RATING_IDX];
-			double *randomMRVec = movieRatingVectors[randomMovieId - 1][randomMovieRating - 1];
-
-			//Get more random vectors for user-user and mr-mr repulsion
-			int randomUserDataIdx2 = randomDataPoint(random);
-			idx = trainIndices[randomUserDataIdx2];
-			dataPt = data[idx];
-			int randomUserId2 = dataPt[USER_ID_IDX];
-			double *randomUserVec2 = userVectors[randomUserId2 - 1];
-
-			int randomMRDataIdx2 = randomDataPoint(random);
-			idx = trainIndices[randomMRDataIdx2];
-			dataPt = data[idx];
-			int randomMovieId2 = dataPt[MOVIE_ID_IDX];
-			int randomMovieRating2 = dataPt[MOVIE_RATING_IDX];
-			double *randomMRVec2 = movieRatingVectors[randomMovieId2 - 1][randomMovieRating2 - 1];
-
-			//Get all five movie rating vectors for this movie
-			double **movieRatingsArr = movieRatingVectors[movieId - 1];
+			double* randomMRVec = movieRatingVectors[randomMovieId - 1][randomMovieRating - 1];
 
 			//Move the vectors toward each other, and away from the randomly chosen vectors
 			moveVectors(
 				userVec,
 				movieRatingVec,
 				movieRating,
-				movieRatingsArr,
 				settings.eta,
 				userEta,
 				mrEta,
+				userVectorsRepel,
+				mrVectorsRepel,
+				settings.repelNum,
 				randomUserVec,
-				randomUserVec2,
 				randomMRVec,
-				randomMRVec2,
 				dimensions,
 				z);
 
+			//Deallocate the vector repel arrays
+			delete[] userVectorsRepel;
+			delete[] mrVectorsRepel;
+
+			//Get random new vectors to update z with
+			randomUserDataIdx = randomDataPoint(random);
+			idx = trainIndices[randomUserDataIdx];
+			dataPt = data[idx];
+			randomUserId = dataPt[USER_ID_IDX];
+			randomUserVec = userVectors[randomUserId - 1];
+
+			randomMRDataIdx = randomDataPoint(random);
+			idx = trainIndices[randomMRDataIdx];
+			dataPt = data[idx];
+			randomMovieId = dataPt[MOVIE_ID_IDX];
+			randomMovieRating = dataPt[MOVIE_RATING_IDX];
+			randomMRVec = movieRatingVectors[randomMovieId - 1][randomMovieRating - 1];
+
+			//Actually update the value of z
 			double oldZVal = zValues[oldestIdx];
 			double newZVal = exp(-getDistanceSquared(randomUserVec, randomMRVec, dimensions));
 
@@ -565,6 +634,7 @@ struct Settings readSettings(char* file) {
 	int iterations;
 	int zSampleSize;
 	int scoreSampleSize;
+	int repelNum;
 
 	settingsInput >> dimensions;
 	settingsInput >> eta;
@@ -573,6 +643,7 @@ struct Settings readSettings(char* file) {
 	settingsInput >> iterations;
 	settingsInput >> zSampleSize;
 	settingsInput >> scoreSampleSize;
+	settingsInput >> repelNum;
 
 	settingsInput.close();
 
@@ -584,6 +655,7 @@ struct Settings readSettings(char* file) {
 	settings.iterations = iterations;
 	settings.zSampleSize = zSampleSize;
 	settings.scoreSampleSize = scoreSampleSize;
+	settings.repelNum = repelNum;
 
 	return settings;
 }
@@ -661,7 +733,7 @@ struct Data readData(char* file, int numDataPoints) {
  * movie-rating vector array
  * @param dimensions The number of dimensions each vector should have
  * @return The arrays of vectors for users and movie-ratings, the counts of
- * each user and movie-rating for calculating emperical probabilities, and the
+ * each user and movie-rating for calculating empirical probabilities, and the
  * number of distinct users and movies in the dataset, in a struct.
  */
 struct Vectors generateVectors(
@@ -947,32 +1019,30 @@ double calculateEta(double etaInitial, double phi, int count) {
  * @param user The user vector of the data point
  * @param mr The movie-rating vector of the data point
  * @param movieRating The actual rating that was given (1, 2, 3, 4, 5)
- * @param movieRatingsArr The five rating vectors for this movie
  * @param etaInitial The initial version of eta given in the settings file
  * @param userEta The calculated value of eta based on user phi and count
  * @param mrEta The calculated value of eta based on movie-rating phi and count
- * @param randomUser1 A random user that the movie-rating is repelled from
+ * @param userVectorsRepel The vectors to repel the user from
  * @param randomUser2 A random user that the user is repelled from
- * @param randomMR1 A random movie-rating that the user is repelled from
+ * @param mrVectorsRepel The vectors to repel the movie-rating from
+ * @param numRepel The number of vectors in the repel arrays
  * @param randomMR2 A random movie-rating that the movie-rating is repelled from
- * @param randomSameMRVec A random movie-rating vector that is for the same
- * rating (if this rating was a 1, this is a random mr vector that is also a 1)
  * @param dimensions The length of the vectors, the number of dimensions given
  * in settings
  * @param z The value of z
  */
 void moveVectors(
-	double *user,
-	double *mr,
+	double* user,
+	double* mr,
 	double movieRating,
-	double **movieRatingsArr,
 	double etaInitial,
 	double userEta,
 	double mrEta,
-	double *randomUser1,
-	double *randomUser2,
-	double *randomMR1,
-	double *randomMR2,
+	double** userVectorsRepel,
+	double** mrVectorsRepel,
+	int numRepel,
+	double* randomUser,
+	double* randomMR,
 	int dimensions,
 	double z) {
 
@@ -980,36 +1050,31 @@ void moveVectors(
 	for (int dimension = 0; dimension < dimensions; dimension++) {
 		double userComponent = user[dimension];
 		double mrComponent = mr[dimension];
-		double randomUserComponent1 = randomUser1[dimension];
-		double randomMRComponent1 = randomMR1[dimension];
 
 		//These are for moving user away from user or mr away from mr
-		double randomUserComponent2 = randomUser2[dimension];
-		double randomMRComponent2 = randomMR2[dimension];
+		double randomUserComponent2 = randomUser[dimension];
+		double randomMRComponent2 = randomMR[dimension];
 
 		//Attract the user and movie rating vectors
 		double newUserComponent = attract(userComponent, mrComponent, userEta);
 		double newMRComponent = attract(mrComponent, userComponent, mrEta);
+		
+		//Repel the user away from a few random movie ratings
+		double userAmnt = 0;
+		double mrAmnt = 0;
+		for (int i1 = 0; i1 < numRepel; i1++) {
+			double userComponentTemp = userVectorsRepel[i1][dimension];
+			userAmnt += (userEta / numRepel * exp(-getDistanceSquared(newUserComponent, userComponentTemp)) / z) * (newUserComponent - userComponentTemp);
 
-		//Repel the user away from a random movie rating and the movie rating away from a random user
-		newUserComponent = repel(newUserComponent, randomMRComponent1, userEta, z);
-		newMRComponent = repel(newMRComponent, randomUserComponent1, mrEta, z);
+			double mrComponentTemp = mrVectorsRepel[i1][dimension];
+			mrAmnt += (mrEta / numRepel * exp(-getDistanceSquared(newMRComponent, mrComponentTemp)) / z) * (newMRComponent - mrComponentTemp);
+		}
+		newUserComponent += userAmnt;
+		newMRComponent += mrAmnt;
 
 		//Repel the user away from a random user and the movie rating away from a random movie rating
 		newUserComponent = repel(newUserComponent, randomUserComponent2, userEta, z);
 		newMRComponent = repel(newMRComponent, randomMRComponent2, mrEta, z);
-
-		//Repel this movie rating away from the other movie ratings
-		/* for (int i1 = 0; i1 < MAX_STARS; i1++) {
-			//Don't repel it from itself
-			if (i1 == movieRating - 1) {
-				continue;
-			}
-
-			double curMRComponent = movieRatingsArr[i1][dimension];
-
-			newMRComponent = repel(newMRComponent, curMRComponent, mrEta, z);
-		} */
 
 		//Set the updated components back into the array
 		user[dimension] = newUserComponent;
@@ -1111,12 +1176,12 @@ double calculateRMSE(
 
 	//Calculate the score on the validation set
 	random_shuffle(&evaluationIndices[0], &evaluationIndices[evaluationSize - 1]);
-	double *error = new double[evaluationSize];
+	double* error = new double[evaluationSize];
 
 	for (int i1 = 0; i1 < evaluationSize; i1++) {
 		//Get a random data point
 		int idx = evaluationIndices[i1];
-		int *triple = data[idx];
+		int* triple = data[idx];
 
 		//Get the info from it
 		int userId = triple[USER_ID_IDX];
@@ -1124,18 +1189,19 @@ double calculateRMSE(
 		int movieRating = triple[MOVIE_RATING_IDX];
 
 		//Get the user vector and all movie rating vectors
-		double *userVector = userVectors[userId - 1];
-		double **movieVectors = movieRatingVectors[movieId - 1];
+		double* userVector = userVectors[userId - 1];
+		double** movieVectors = movieRatingVectors[movieId - 1];
+		int* movieCounts = movieRatingCounts[movieId - 1];
 
 		double avgStar = 0;
 		double pTotal = 0;
 
 		//Go through each star, calculate the probability of the user giving that rating
 		for (int star = 0; star < MAX_STARS; star++) {
-			double *movieRatingVector = movieVectors[star];
+			double* movieRatingVector = movieVectors[star];
 			double d2 = getDistanceSquared(userVector, movieRatingVector, dimensions);
 
-			double p = exp(-d2) * movieRatingCounts[movieId - 1][star];
+			double p = exp(-d2) * movieCounts[star];
 
 			avgStar += (star + 1) * p;
 			pTotal += p;
@@ -1161,4 +1227,79 @@ double calculateRMSE(
 	delete[] error;
 
 	return rmse;
+}
+
+/**
+ * Writes probability values for a few random data points
+ * @param data The original dataset array
+ * @param userVectors The array of user vectors
+ * @param movieRatingVectors The array of movie-rating vectors
+ * @param movieRatingCounts The array of movie-rating counts
+ * @param dimensions The number of dimensions of the vectors
+ * @param barGraphIndices The indices of the data points to write bbar graph
+ * values for
+ */
+void writeBarGraphValues(
+	int** data,
+	double** userVectors,
+	double*** movieRatingVectors,
+	int** movieRatingCounts,
+	int dimensions,
+	int barGraphIndices[]) {
+
+	//Go through the data points we want to generate bar graphs for
+	//Calculate the probabilities of each star and write them to a file
+	for (int i1 = 0; i1 < BAR_GRAPH_COUNT; i1++) {
+		int idx = barGraphIndices[i1];
+		int* triple = data[idx];
+
+		//Get the info from it
+		int userId = triple[USER_ID_IDX];
+		int movieId = triple[MOVIE_ID_IDX];
+		int movieRating = triple[MOVIE_RATING_IDX];
+
+		//Get the user vector and all movie rating vectors
+		double* userVector = userVectors[userId - 1];
+		double** movieVectors = movieRatingVectors[movieId - 1];
+		int* movieCounts = movieRatingCounts[movieId - 1];
+
+		double pTotal = 0;
+
+		//Go through each star and calculate the sum for normalization
+		for (int star = 0; star < MAX_STARS; star++) {
+			double* movieRatingVector = movieVectors[star];
+			double d2 = getDistanceSquared(userVector, movieRatingVector, dimensions);
+
+			pTotal += exp(-d2) * movieCounts[star];
+		}
+
+		//Create the file, in comma separated value format
+		//Each row is an iteration, each column is a probability
+		//first column: probability of rating with a 1
+		//second column: probability of rating with a 2
+		//so on...
+		ofstream file;
+		string name = "bar_graph_" + to_string(i1 + 1) + "_movieid=" + to_string(movieId) + ".csv";
+		file.open(name, ios::app);
+
+		//Go back through the stars and calculate the probability of each, and
+		//write it out to the output file
+		for (int star = 0; star < MAX_STARS; star++) {
+			double* movieRatingVector = movieVectors[star];
+			double d2 = getDistanceSquared(userVector, movieRatingVector, dimensions);
+
+			//This is the conditional probability
+			//P(rating = k | user = i, movie = j)
+			double p = exp(-d2) * movieCounts[star] / pTotal;
+
+			//Write the probability to the file
+			file << p;
+			if (star != MAX_STARS - 1) {
+				//Don't write a comma after the last number
+				file << ",";
+			}
+		}
+		file << "\n";
+		file.close();
+	}
 }
