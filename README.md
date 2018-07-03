@@ -36,7 +36,7 @@ The input file is simply a text file which is used for configuring several of th
 dimensions  
 η  
 φ (users)  
-φ (movie-ratings)
+φ (movie-ratings)  
 iterations  
 repulsion number
 
