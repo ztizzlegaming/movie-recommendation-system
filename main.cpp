@@ -47,8 +47,6 @@ struct Settings {
 	int phiUser;
 	int phiMR;
 	int iterations;
-	int zSampleSize;
-	int scoreSampleSize;
 	int repelNum;
 };
 
@@ -169,6 +167,8 @@ const double TRAIN_SIZE = 0.8;
 const double VALIDATION_SIZE = 0.1;
 const double TEST_SIZE = 1 - TRAIN_SIZE - VALIDATION_SIZE;
 
+const int Z_SAMPLE_SIZE = 10000;
+
 //The input file has:
 //dimensions
 //initial eta
@@ -207,8 +207,6 @@ int main(int argc, char *argv[]) {
 
 	//Pull a few settings out of the struct since it is used a lot
 	int dimensions = settings.dimensions;
-	int zSampleSize = settings.zSampleSize;
-	int scoreSampleSize = settings.scoreSampleSize;
 
 	//Calculate delta based on eta
 	double delta = 1 / (4 * settings.eta);
@@ -313,7 +311,7 @@ int main(int argc, char *argv[]) {
 		movieRatingVectors,
 		random,
 		randomDataPoint,
-		zSampleSize,
+		Z_SAMPLE_SIZE,
 		dimensions);
 	double z = zStruct.z;
 	double* zValues = zStruct.zValues;
@@ -426,10 +424,10 @@ int main(int argc, char *argv[]) {
 
 			zValues[oldestIdx] = newZVal;
 
-			z += (newZVal - oldZVal) / zSampleSize;
+			z += (newZVal - oldZVal) / Z_SAMPLE_SIZE;
 
 			oldestIdx++;
-			oldestIdx %= zSampleSize;
+			oldestIdx %= Z_SAMPLE_SIZE;
 
 			//Print out logging information 100 times an iterations
 			if (dataIdx % reportNum == 0) { //Print out Z and the percentage completed of the iteration
@@ -632,8 +630,6 @@ struct Settings readSettings(char* file) {
 	int phiUser;
 	int phiMR;
 	int iterations;
-	int zSampleSize;
-	int scoreSampleSize;
 	int repelNum;
 
 	settingsInput >> dimensions;
@@ -641,8 +637,6 @@ struct Settings readSettings(char* file) {
 	settingsInput >> phiUser;
 	settingsInput >> phiMR;
 	settingsInput >> iterations;
-	settingsInput >> zSampleSize;
-	settingsInput >> scoreSampleSize;
 	settingsInput >> repelNum;
 
 	settingsInput.close();
@@ -653,8 +647,6 @@ struct Settings readSettings(char* file) {
 	settings.phiUser = phiUser;
 	settings.phiMR = phiMR;
 	settings.iterations = iterations;
-	settings.zSampleSize = zSampleSize;
-	settings.scoreSampleSize = scoreSampleSize;
 	settings.repelNum = repelNum;
 
 	return settings;
