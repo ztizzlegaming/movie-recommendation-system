@@ -250,43 +250,6 @@ int main(int argc, char *argv[]) {
 	int* testIndices = datasets.testIndices;
 	int testSize = datasets.testSize;
 
-	//Pick a few of the validation points to look at the bar graph for
-	//For now randomly select them. Later pick user and movie combinations
-	//that appear more often.
-	random_shuffle(&validationIndices[0], &validationIndices[validationSize - 1]);
-	int barGraphIndices[BAR_GRAPH_COUNT];
-	for (int i1 = 0; i1 < BAR_GRAPH_COUNT; i1++) {
-		int idx = validationIndices[i1];
-		barGraphIndices[i1] = idx;
-
-		//Calculate the probability of giving each rating based on the empirical probabilities
-		int* dataPt = data[idx];
-		int userId = dataPt[USER_ID_IDX];
-		int movieId = dataPt[MOVIE_ID_IDX];
-		int movieRating = dataPt[MOVIE_RATING_IDX];
-
-		//Initialize output file for empirical probabilities
-		ofstream file;
-		string name = "empirical_" + to_string(i1 + 1) + "_movieid=" + to_string(movieId) + ".csv";
-		file.open(name);
-
-		double sum = 0;
-		for (int star = 0; star < MAX_STARS; star++) {
-			int c = movieRatingCounts[movieId - 1][star];
-			sum += c;
-		}
-
-		for (int star = 0; star < MAX_STARS; star++) {
-			double p = movieRatingCounts[movieId - 1][star] / sum;
-
-			file << p;
-			if (star != MAX_STARS - 1) {
-				file << ",";
-			}
-		}
-		file.close();
-	}
-
 	//Init random data point generator from training set
 	mt19937 random(time(0));
 	uniform_int_distribution<int> randomDataPoint(0, trainSize - 1);
