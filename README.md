@@ -40,8 +40,12 @@ dimensions
 iterations  
 repulsion number
 
-Dimensions is the number of dimensions that the user and movie-rating vectors are be. The model seems to perform better with more dimensions, so upwards of 40 or 50 works best. However, more dimensions does increase runtime.  
-η is the initial value of η. η is basically the power of the attraction and repulsion. A small η means the vectors will not move much when being attracted or repelled, but a large η means they will be moved significantly. η must be between zero and one. η = 0 means the vectors do not move at all, and η = 1 means when a vector is moved, it will move exactly to the spot of the vector it is being attracted to. We tend to keep η small: around 0.01.  
-φ is the rate that the vector movement slows down. Over time, the power of the attraction and repulsion decreases. Smaller values of φ cause the power to decrease very quickly, while larger values of φ cause the power to decrease more slowly. As there are 480,189 user vectors and 17,770 * 5 = 88,850 movie-rating vectors, we see that there are about 5.4 times as many users as movie-ratings. To keep the slow-down at the same rate, we tend to keep the movie-rating φ 5.4 times as large as the user φ.  
-Iterations is the number of passes we will take over the training data moving the vectors before terminating.  
+Dimensions is the number of dimensions that the user and movie-rating vectors are be. The model seems to perform better with more dimensions, so upwards of 40 or 50 works best. However, more dimensions does increase runtime.
+
+η is the initial value of η. η is basically the power of the attraction and repulsion. A small η means the vectors will not move much when being attracted or repelled, but a large η means they will be moved significantly. η must be between zero and one. η = 0 means the vectors do not move at all, and η = 1 means when a vector is moved, it will move exactly to the spot of the vector it is being attracted to. We tend to keep η small: around 0.01.
+
+φ is the rate that the vector movement slows down. Over time, the power of the attraction and repulsion decreases. Smaller values of φ cause the power to decrease very quickly, while larger values of φ cause the power to decrease more slowly. As there are 480,189 user vectors and 17,770 * 5 = 88,850 movie-rating vectors, we see that there are about 5.4 times as many users as movie-ratings. To keep the slow-down at the same rate, we tend to keep the movie-rating φ 5.4 times as large as the user φ.
+
+Iterations is the number of passes we will take over the training data moving the vectors before terminating.
+
 Repulsion number is the number of movie-rating vectors the user vector is repelled from and the number of user vectors the movie-rating vector is repelled from when doing attraction and repulsion. This does increase runtime, so we usually don't go above ten.
