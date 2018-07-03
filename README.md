@@ -49,3 +49,5 @@ Dimensions is the number of dimensions that the user and movie-rating vectors ar
 Iterations is the number of passes we will take over the training data moving the vectors before terminating.
 
 Repulsion number is the number of movie-rating vectors the user vector is repelled from and the number of user vectors the movie-rating vector is repelled from when doing attraction and repulsion. This does increase runtime, so we usually don't go above ten.
+
+```input.txt``` contains the current best hyperparameters we have found.
