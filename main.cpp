@@ -143,6 +143,11 @@ double calculateRMSE(
 	double*** movieRatingVectors,
 	int** movieRatingCounts,
 	int dimensions);
+double calculateRMSEEmpirical(
+	int* evaluationIndices,
+	int evaluationSize,
+	int** data,
+	int** movieRatingCounts);
 void writeBarGraphValues(
 	int** data,
 	double** userVectors,
@@ -283,6 +288,10 @@ int main(int argc, char *argv[]) {
 	//Save the initial z in case we need to use it later, and print it out
 	double initialZ = z;
 	cout << "Initial z: " << z << endl;
+
+	//Calculate the RMSE using only the empirical probabilities w/o the model
+	double rmseEmpirical = calculateRMSEEmpirical(validationIndices, validationSize, data, movieRatingCounts);
+	cout << "Empirical_RMSE: " << rmseEmpirical << endl;
 
 	//Go through number of iterations to move vectors
 	for (int iteration = 0; iteration < settings.iterations; iteration++) {
@@ -534,7 +543,7 @@ int main(int argc, char *argv[]) {
 			movieRatingVectors,
 			movieRatingCounts,
 			dimensions);
-		cout << "RMSE: " << rmse << endl;
+		cout << "Model_RMSE: " << rmse << endl;
 	}
 
 	//Clear out all of the dynamic arrays before stopping
@@ -1113,6 +1122,7 @@ double normalizeUnitLength(double a, double aNorm2) {
 /**
  * Calculates the RMSE for the model on given data points.
  * @param evaluationIndices The data indices to evaluate the model on
+ * @param evaluationSize The size of the evaluation set
  * @param data The array of data points
  * @param userVectors The array of user vectors
  * @param movieRatingVectors The array of movie-rating vectors
@@ -1157,6 +1167,66 @@ double calculateRMSE(
 			double d2 = getDistanceSquared(userVector, movieRatingVector, dimensions);
 
 			double p = exp(-d2) * movieCounts[star];
+
+			avgStar += (star + 1) * p;
+			pTotal += p;
+		}
+
+		//Find the average star rating
+		avgStar /= pTotal;
+
+		//Calculate the error between our prediction and the actual
+		error[i1] = avgStar - movieRating;
+	}
+
+	//Calculate the root mean squared error
+	double mse = 0;
+	for (int i1 = 0; i1 < evaluationSize; i1++) {
+		double err = error[i1];
+		mse += err * err;
+	}
+	mse /= evaluationSize;
+	double rmse = sqrt(mse);
+
+	//Clear out the error array
+	delete[] error;
+
+	return rmse;
+}
+/**
+ * Calculate the RMSE based on only the empirical probabilities
+ * @param evaluationIndices The data indices to evaluate the model on
+ * @param evaluationSize The size of the evaluation set
+ * @param data The array of data points
+ * @param movieRatingCounts The array of counts of movie-rating vectors
+ * @return The RMSE of the model
+ */
+double calculateRMSEEmpirical(
+	int* evaluationIndices,
+	int evaluationSize,
+	int** data,
+	int** movieRatingCounts) {
+
+	double* error = new double[evaluationSize];
+	for (int i1 = 0; i1 < evaluationSize; i1++) {
+		//Get a random data point
+		int idx = evaluationIndices[i1];
+		int* triple = data[idx];
+
+		//Get the info from it
+		int userId = triple[USER_ID_IDX];
+		int movieId = triple[MOVIE_ID_IDX];
+		int movieRating = triple[MOVIE_RATING_IDX];
+
+		int* movieCounts = movieRatingCounts[movieId - 1];
+
+		double avgStar = 0;
+		double pTotal = 0;
+
+		//Go through each star, calculate the probability of the user giving that rating
+		for (int star = 0; star < MAX_STARS; star++) {
+
+			double p = movieCounts[star];
 
 			avgStar += (star + 1) * p;
 			pTotal += p;
