@@ -1,5 +1,5 @@
 # Netflix Prize 
-## Dr. Michael Lamar, Jordan Turley, Centre College
+## Dr. Michael Lamar, Jordan Turley, Zeyang Huang
 ### Overview
 
 This project proves a machine learning implementation to the [Netflix Prize](https://en.wikipedia.org/wiki/Netflix_Prize), a competition by Netflix from 2006 to 2009 allowing anyone to develop an algorithm for predicting user ratings for films.
