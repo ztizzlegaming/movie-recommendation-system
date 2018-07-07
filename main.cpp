@@ -174,6 +174,8 @@ const double TEST_SIZE = 1 - TRAIN_SIZE - VALIDATION_SIZE;
 
 const int Z_SAMPLE_SIZE = 10000;
 
+const int SCALING_FACTOR = 1;
+
 //The input file has:
 //dimensions
 //initial eta
@@ -392,7 +394,7 @@ int main(int argc, char *argv[]) {
 
 			//Actually update the value of z
 			double oldZVal = zValues[oldestIdx];
-			double newZVal = exp(-getDistanceSquared(randomUserVec, randomMRVec, dimensions));
+			double newZVal = exp(SCALING_FACTOR * -getDistanceSquared(randomUserVec, randomMRVec, dimensions));
 
 			zValues[oldestIdx] = newZVal;
 
@@ -526,7 +528,7 @@ int main(int argc, char *argv[]) {
 					double userPBar = (double) userCounts[userId - 1] / numDataPoints;
 					double mrPBar = (double) movieRatingCounts[movieId - 1][movieRating - 1] / numDataPoints;
 
-					double likelihood = userPBar * mrPBar * exp(-getDistanceSquared(userVec, mrVec, dimensions)) / z;
+					double likelihood = userPBar * mrPBar * exp(SCALING_FACTOR * -getDistanceSquared(userVec, mrVec, dimensions)) / z;
 					likelihoodAvg += likelihood;
 				}
 				likelihoodAvg /= AVERAGE_SAMPLE_SIZE;
@@ -910,7 +912,7 @@ struct ZValues calculateInitialZ(
 		int movieRating = mrSampleDataPt[MOVIE_RATING_IDX];
 		double *mrVec = movieRatingVectors[movieId - 1][movieRating - 1];
 
-		double zVal = exp(-getDistanceSquared(userVec, mrVec, dimensions));
+		double zVal = exp(SCALING_FACTOR * -getDistanceSquared(userVec, mrVec, dimensions));
 
 		z += zVal;
 		zValues[i1] = zVal;
@@ -1028,10 +1030,10 @@ void moveVectors(
 		double mrAmnt = 0;
 		for (int i1 = 0; i1 < numRepel; i1++) {
 			double userComponentTemp = userVectorsRepel[i1][dimension];
-			userAmnt += (userEta / numRepel * exp(-getDistanceSquared(newUserComponent, userComponentTemp)) / z) * (newUserComponent - userComponentTemp);
+			userAmnt += (userEta / numRepel * exp(SCALING_FACTOR * -getDistanceSquared(newUserComponent, userComponentTemp)) / z) * (newUserComponent - userComponentTemp);
 
 			double mrComponentTemp = mrVectorsRepel[i1][dimension];
-			mrAmnt += (mrEta / numRepel * exp(-getDistanceSquared(newMRComponent, mrComponentTemp)) / z) * (newMRComponent - mrComponentTemp);
+			mrAmnt += (mrEta / numRepel * exp(SCALING_FACTOR * -getDistanceSquared(newMRComponent, mrComponentTemp)) / z) * (newMRComponent - mrComponentTemp);
 		}
 		newUserComponent += userAmnt;
 		newMRComponent += mrAmnt;
@@ -1077,7 +1079,7 @@ double attract(double a, double b, double eta) {
  * @return The resulting value of a
  */
 double repel(double a, double other, double eta, double z) {
-	return a + (eta * exp(-getDistanceSquared(a, other)) / z) * (a - other);
+	return a + (eta * exp(SCALING_FACTOR * -getDistanceSquared(a, other)) / z) * (a - other);
 }
 
 /**
@@ -1166,7 +1168,7 @@ double calculateRMSE(
 			double* movieRatingVector = movieVectors[star];
 			double d2 = getDistanceSquared(userVector, movieRatingVector, dimensions);
 
-			double p = exp(-d2) * movieCounts[star];
+			double p = exp(SCALING_FACTOR * -d2) * movieCounts[star];
 
 			avgStar += (star + 1) * p;
 			pTotal += p;
@@ -1295,7 +1297,7 @@ void writeBarGraphValues(
 			double* movieRatingVector = movieVectors[star];
 			double d2 = getDistanceSquared(userVector, movieRatingVector, dimensions);
 
-			pTotal += exp(-d2) * movieCounts[star];
+			pTotal += exp(SCALING_FACTOR * -d2) * movieCounts[star];
 		}
 
 		//Create the file, in comma separated value format
@@ -1315,7 +1317,7 @@ void writeBarGraphValues(
 
 			//This is the conditional probability
 			//P(rating = k | user = i, movie = j)
-			double p = exp(-d2) * movieCounts[star] / pTotal;
+			double p = exp(SCALING_FACTOR * -d2) * movieCounts[star] / pTotal;
 
 			//Write the probability to the file
 			file << p;
