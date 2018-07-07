@@ -66,6 +66,7 @@ struct Data {
 struct Vectors {
 	double** userVectors;
 	int *userCounts;
+	int **userRatingCounts;
 	int *userCumulativeCounts;
 	int totalUsers;
 
@@ -232,6 +233,7 @@ int main(int argc, char *argv[]) {
 	//Get the vector and count arrays from the struct
 	double** userVectors = vectors.userVectors;
 	int *userCounts = vectors.userCounts;
+	int** userRatingCounts = vectors.userRatingCounts;
 	int *userCumulativeCounts = vectors.userCumulativeCounts;
 
 	double*** movieRatingVectors = vectors.movieRatingVectors;
@@ -269,7 +271,7 @@ int main(int argc, char *argv[]) {
 
 		//Initialize output file for empirical probabilities
 		ofstream file;
-		string name = "empirical_" + to_string(i1 + 1) + "_movieid=" + to_string(movieId) + ".csv";
+		string name = "movie_empirical_" + to_string(i1 + 1) + "_movieid=" + to_string(movieId) + ",rating=" + to_string(movieRating) + ".csv";
 		file.open(name);
 
 		double sum = 0;
@@ -287,6 +289,30 @@ int main(int argc, char *argv[]) {
 			}
 		}
 		file.close();
+
+		//Find the distribution based on the user empirical probabilities
+		ofstream uFile;
+		name = "user_empirical_" + to_string(i1 + 1) + "_movieid=" + to_string(movieId) + ",rating=" + to_string(movieRating) + ".csv";
+		uFile.open(name);
+
+		sum = 0;
+		for (int star = 0; star < MAX_STARS; star++) {
+			int c = userRatingCounts[userId - 1][star];
+			sum += c;
+		}
+		cout << "Sum: " << sum << endl;
+		cout << "Other: " << userCounts[userId - 1];
+
+		for (int star = 0; star < MAX_STARS; star++) {
+			double p = userRatingCounts[userId - 1][star] / sum;
+
+			uFile << p;
+			if (star != MAX_STARS - 1) {
+				uFile << ",";
+			}
+		}
+		file.close();
+
 	}
 
 	//Init random data point generator from training set
@@ -768,6 +794,10 @@ struct Vectors generateVectors(
 	//Init array to hold user vectors and to hold user counts
 	double **userVectors = new double*[maxUserId];
 	int *userCounts = new int[maxUserId]; //To calculate the empirical probability
+	int** userRatingCounts = new int*[maxUserId];
+	for (int i1 = 0; i1 < maxUserId; i1++) {
+		userRatingCounts[i1] = new int[MAX_STARS];
+	}
 	int *userCumulativeCounts = new int[maxUserId]; //To calculate eta
 
 	//Init each element of arrays
@@ -806,6 +836,7 @@ struct Vectors generateVectors(
 		int movieRating = dataPt[MOVIE_RATING_IDX];
 
 		userCounts[userId - 1]++;
+		userRatingCounts[userId - 1][movieRating - 1]++;
 		movieRatingCounts[movieId - 1][movieRating - 1]++;
 
 		//Only generate a new vector if this user doesn't have one yet
@@ -855,6 +886,7 @@ struct Vectors generateVectors(
 	struct Vectors vectors;
 	vectors.userVectors = userVectors;
 	vectors.userCounts = userCounts;
+	vectors.userRatingCounts = userRatingCounts;
 	vectors.userCumulativeCounts = userCumulativeCounts;
 	vectors.totalUsers = numUsers;
 	vectors.movieRatingVectors = movieRatingVectors;
@@ -1287,7 +1319,7 @@ void writeBarGraphValues(
 		//second column: probability of rating with a 2
 		//so on...
 		ofstream file;
-		string name = "bar_graph_" + to_string(i1 + 1) + "_movieid=" + to_string(movieId) + ".csv";
+		string name = "bar_graph_" + to_string(i1 + 1) + "_movieid=" + to_string(movieId) + ",rating=" + to_string(movieRating) + ".csv";
 		file.open(name, ios::app);
 
 		//Go back through the stars and calculate the probability of each, and
