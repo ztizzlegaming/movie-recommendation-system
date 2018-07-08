@@ -174,7 +174,8 @@ const double TEST_SIZE = 1 - TRAIN_SIZE - VALIDATION_SIZE;
 
 const int Z_SAMPLE_SIZE = 10000;
 
-const int SCALING_FACTOR = 1;
+//TODO move this into main if it is calculated depending on something like dimensions
+const double SCALING_FACTOR = 1;
 
 //The input file has:
 //dimensions
