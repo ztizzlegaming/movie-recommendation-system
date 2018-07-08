@@ -88,7 +88,8 @@ struct Vectors generateVectors(
 	int numDataPoints,
 	int maxUserId,
 	int maxMovieId,
-	int dimensions);
+	int dimensions,
+	double scalingFactor);
 struct Datasets splitDatasets(int* dataIndices, int numDataPoints);
 int* generateSet(int* dataIndices, int startIdx, int endIdx);
 struct ZValues calculateInitialZ(
@@ -118,10 +119,11 @@ void moveVectors(
 	double mrEta,
 	double randomUserEta,
 	double randomMREta,
-	double z);
-double attract(double a, double b, double c);
+	double z,
+	double scalingFactor);
+double attract(double a, double b, double c, double scalingFactor);
 double sign(double num);
-double repel(double a, double b, double c);
+double repel(double a, double b, double c, double scalingFactor);
 double mod(double a, double b);
 double getDistanceSquared(double a, double b);
 double getDistanceSquared(double *a, double *b, int dimensions);
@@ -201,6 +203,10 @@ int main(int argc, char *argv[]) {
 	int repulsionSampleSize = settings.repulsionSampleSize;
 	int scoreSampleSize = settings.scoreSampleSize;
 
+	//TODO calculate this scaling factor based on the number of dimensions
+	//Something like 1 / sqrt(dimensions)
+	double scalingFactor = 1;
+
 	cout << "Reading in data" << endl;
 
 	//Read in the data points from the binary file
@@ -215,7 +221,7 @@ int main(int argc, char *argv[]) {
 	cout << "Initializing vectors" << endl;
 
 	//Generate the vectors
-	struct Vectors vectors = generateVectors(data, numDataPoints, maxUserId, maxMovieId, dimensions);
+	struct Vectors vectors = generateVectors(data, numDataPoints, maxUserId, maxMovieId, dimensions, scalingFactor);
 	
 	//Get the vector and count arrays from the struct
 	double** userVectors = vectors.userVectors;
@@ -472,7 +478,8 @@ int main(int argc, char *argv[]) {
 				movieRatingEta,
 				randomUserEta,
 				randomMREta,
-				z);
+				z,
+				scalingFactor);
 
 			//Select new random user and mr vectors for the z calculation
 			newUserDataIdx = randomDataPoint(random);
@@ -769,7 +776,8 @@ struct Vectors generateVectors(
 	int numDataPoints,
 	int maxUserId,
 	int maxMovieId,
-	int dimensions) {
+	int dimensions,
+	double scalingFactor) {
 
 	//Initialize random number generators
 	mt19937 random(time(0));
@@ -824,7 +832,7 @@ struct Vectors generateVectors(
 
 			userVectors[userId - 1] = new double[dimensions];
 			for (int dimension = 0; dimension < dimensions; dimension++) {
-				double d = randomDouble(random);
+				double d = randomDouble(random) / scalingFactor;
 				userVectors[userId- 1][dimension] = d;
 			}
 		}
@@ -839,7 +847,7 @@ struct Vectors generateVectors(
 			for (int star = 0; star < MAX_STARS; star++) {
 				movieRatingVectors[movieId - 1][star] = new double[dimensions];
 				for (int dimension = 0; dimension < dimensions; dimension++) {
-					double d = randomDouble(random);
+					double d = randomDouble(random) / scalingFactor;
 					movieRatingVectors[movieId - 1][star][dimension] = d;
 				}
 			}
@@ -993,7 +1001,8 @@ void moveVectors(
 	double movieRatingEta,
 	double randomUserEta,
 	double randomMREta,
-	double z) {
+	double z,
+	double scalingFactor) {
 	
 	//Go through each dimension of the vector
 	for (int dimension = 0; dimension < dimensions; dimension++) {
@@ -1014,11 +1023,11 @@ void moveVectors(
 		//double averageMovieRatingRadius = sqrt(pow(averageMovieRatingXComponent, 2) + pow(averageMovieRatingYComponent, 2));
 
 		//double userRepulsionConst = userEta * averageMovieRatingRadius * exp(-getDistanceSquared(userPt, averageMovieRatingAng)) / z;
-		double newUserPt = attract(userPt, movieRatingPt, userEta); // / (1 + userRepulsionConst)); //Move userPt toward movieRatingPt
-		newUserPt = repel(newUserPt, newMovieRatingComponent, userEta); //, userRepulsionConst);
+		double newUserPt = attract(userPt, movieRatingPt, userEta, scalingFactor); // / (1 + userRepulsionConst)); //Move userPt toward movieRatingPt
+		newUserPt = repel(newUserPt, newMovieRatingComponent, userEta, scalingFactor); //, userRepulsionConst);
 		//attract(newUserPt, fmod(averageMovieRatingAng + VECTOR_MAX_SIZE / 2, VECTOR_MAX_SIZE), userRepulsionConst); //Move userPt away from average movie rating
 
-		newUserPt = repel(newUserPt, *randomUserVec2, randomUserEta); //new user-randomuser repel
+		newUserPt = repel(newUserPt, *randomUserVec2, randomUserEta, scalingFactor); //new user-randomuser repel
 		// ---- > randomUserEta, userEta
 
 		//Get/calculate what we need for repulsion from the average
@@ -1032,11 +1041,11 @@ void moveVectors(
 
 		//Move the movie rating toward the user
 		//double movieRatingRepulsionConst = movieRatingEta * averageUserRadius * exp(-getDistanceSquared(averageUserAng, movieRatingPt)) / z;
-		double newMovieRatingPt = attract(movieRatingPt, userPt, movieRatingEta); // / (1 + movieRatingRepulsionConst)); //Move movieRatingPt toward userPt
-		newMovieRatingPt = repel(newMovieRatingPt, newUserComponent, movieRatingEta); //, movieRatingRepulsionConst);
+		double newMovieRatingPt = attract(movieRatingPt, userPt, movieRatingEta, scalingFactor); // / (1 + movieRatingRepulsionConst)); //Move movieRatingPt toward userPt
+		newMovieRatingPt = repel(newMovieRatingPt, newUserComponent, movieRatingEta, scalingFactor); //, movieRatingRepulsionConst);
 		//attract(newMovieRatingPt, fmod(averageUserAng + VECTOR_MAX_SIZE / 2, VECTOR_MAX_SIZE), movieRatingRepulsionConst); //Move movieRatingPt away from the average user
 
-		newMovieRatingPt = repel(newMovieRatingPt, *randomMRVec2, randomMREta);//new movie-random repel
+		newMovieRatingPt = repel(newMovieRatingPt, *randomMRVec2, randomMREta, scalingFactor);//new movie-random repel
 		// ----> movieRatingEta ? randomMReta??
 
 		//Set the components back into their vectors
@@ -1057,21 +1066,21 @@ void moveVectors(
 /**
 * @return The value of a after being attracted to b
 */
-double attract(double a, double b, double c) {
+double attract(double a, double b, double c, double scalingFactor) {
 	double r = a - c * (a - b);
 	if (abs(a - b) > VECTOR_HALF_SIZE) {
 		r += c * sign(a - b);
 	}
 
-	return mod(r, VECTOR_MAX_SIZE);
+	return mod(r, VECTOR_MAX_SIZE) * scalingFactor;
 }
 
 /**
  * Repel just attracts the vector to the opposite of the other vector
  * @return the value of a after being repelled from b
  */
-double repel(double a, double b, double c) {
-	return attract(a, mod(b + VECTOR_HALF_SIZE, VECTOR_MAX_SIZE), c);
+double repel(double a, double b, double c, double scalingFactor) {
+	return attract(a, mod(b + VECTOR_HALF_SIZE, VECTOR_MAX_SIZE), c, scalingFactor);
 }
 
 /**
