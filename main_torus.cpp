@@ -110,20 +110,14 @@ void moveVectors(
 	double *randomUserVec2, //new
 	double *randomMRVec2, //new
 	int dimensions,
-	double *averageMovieRatingX,
-	double *averageMovieRatingY,
-	double *averageUserX,
-	double *averageUserY,
 	double etaInitial,
 	double userEta,
 	double mrEta,
-	double randomUserEta,
-	double randomMREta,
 	double z,
 	double scalingFactor);
 double attract(double a, double b, double c, double scalingFactor);
 double sign(double num);
-double repel(double a, double b, double c, double scalingFactor);
+double repel(double a, double b, double c, double z, double scalingFactor);
 double mod(double a, double b);
 double getDistanceSquared(double a, double b);
 double getDistanceSquared(double *a, double *b, int dimensions);
@@ -280,76 +274,6 @@ int main(int argc, char *argv[]) {
 	double initialZ = z;
 	cout << "Initial z: " << z << endl;
 
-	//Generate samples of user and movie rating vectors for repulsion
-	int *userRepulsionSample = new int[repulsionSampleSize];
-	int *movieRatingRepulsionSample = new int[repulsionSampleSize];
-
-	//The average movie rating vector x and y
-	double *averageUserX = new double[dimensions];
-	double *averageUserY = new double[dimensions];
-	double *averageMovieRatingX = new double[dimensions];
-	double *averageMovieRatingY = new double[dimensions];
-
-	//Fill the arrays with zero
-	fill_n(averageUserX, dimensions, 0);
-	fill_n(averageUserY, dimensions, 0);
-	fill_n(averageMovieRatingX, dimensions, 0);
-	fill_n(averageMovieRatingY, dimensions, 0);
-
-	//Generate sample of users for repulsion
-	random_shuffle(&trainIndices[0], &trainIndices[trainSize - 1]);
-	for (int i1 = 0; i1 < repulsionSampleSize; i1++) {
-		int idx = trainIndices[i1];
-		userRepulsionSample[i1] = idx;
-
-		int *dataPt = data[idx];
-		int userId = dataPt[USER_ID_IDX];
-
-		double *userVector = userVectors[userId - 1];
-		for (int dimension = 0; dimension < dimensions; dimension++) {
-			double pt = userVector[dimension];
-			
-			//Convert the component to an x-y point and store it
-			double x = cos(pt * TWO_PI);
-			double y = sin(pt * TWO_PI);
-			averageUserX[dimension] += x;
-			averageUserY[dimension] += y;
-		}
-	}
-
-	//Generate sample of movie ratings for repulsion
-	random_shuffle(&trainIndices[0], &trainIndices[trainSize - 1]);
-	for (int i1 = 0; i1 < repulsionSampleSize; i1++) {
-		int idx = trainIndices[i1];
-		movieRatingRepulsionSample[i1] = idx;
-
-		int *dataPt = data[idx];
-		int movieId = dataPt[MOVIE_ID_IDX];
-		int movieRating = dataPt[MOVIE_RATING_IDX];
-
-		double *movieRatingVector = movieRatingVectors[movieId - 1][movieRating - 1];
-		for (int dimension = 0; dimension < dimensions; dimension++) {
-			double pt = movieRatingVector[dimension];
-
-			//Convert the component to an x-y point and store it
-			double x = cos(pt * TWO_PI);
-			double y = sin(pt * TWO_PI);
-			averageMovieRatingX[dimension] += x;
-			averageMovieRatingY[dimension] += y;
-		}
-	}
-
-	//Actually average the points
-	for (int dimension = 0; dimension < dimensions; dimension++) {
-		averageUserX[dimension] /= repulsionSampleSize;
-		averageUserY[dimension] /= repulsionSampleSize;
-		averageMovieRatingX[dimension] /= repulsionSampleSize;
-		averageMovieRatingY[dimension] /= repulsionSampleSize;
-	}
-
-	//The oldest data point in the samples
-	int oldestSampleIdx = 0;
-
 	//Go through the number of iterations to move the vectors
 	for (int iteration = 0; iteration < settings.iterations; iteration++) {
 		random_shuffle(&trainIndices[0], &trainIndices[trainSize - 1]);
@@ -378,17 +302,6 @@ int main(int argc, char *argv[]) {
 
 			double *movieRatingVector = movieRatingVectors[movieId - 1][movieRating - 1];
 			double movieRatingEta = calculateEta(etaInitial, settings.phiMR, movieRatingCumulativeCounts[movieId - 1][movieRating - 1]);
-
-			//Get the oldest user vector in the sample
-			int oldestUserDataIdx = userRepulsionSample[oldestSampleIdx];
-			int oldestUserId = data[oldestUserDataIdx][USER_ID_IDX];
-			double *oldestUserVector = userVectors[oldestUserId - 1];
-
-			//Get the oldest movie rating vector in the sample
-			int oldestMovieRatingDataIdx = movieRatingRepulsionSample[oldestSampleIdx];
-			int oldestMovieId = data[oldestMovieRatingDataIdx][MOVIE_ID_IDX];
-			int oldestMovieRating = data[oldestMovieRatingDataIdx][MOVIE_RATING_IDX];
-			double *oldestMovieRatingVector = movieRatingVectors[oldestMovieId - 1][oldestMovieRating - 1];
 			
 			//Get a random user vector
 			int newUserDataIdx = randomDataPoint(random);
@@ -402,43 +315,6 @@ int main(int argc, char *argv[]) {
 			int randomMovieId = dataPt[MOVIE_ID_IDX];
 			int randomMovieRating = dataPt[MOVIE_RATING_IDX];
 			double *newMovieRatingVector = movieRatingVectors[randomMovieId - 1][randomMovieRating - 1];
-
-			//Calculate the eta values for the random vectors
-			double randomUserEta = calculateEta(etaInitial, settings.phiUser, userCumulativeCounts[randomUserId - 1]);
-			double randomMREta = calculateEta(etaInitial, settings.phiMR, movieRatingCumulativeCounts[randomMovieId - 1][randomMovieRating - 1]);
-
-			//Update the average user and movie rating (x, y) for each dimension
-			for (int dimension = 0; dimension < dimensions; dimension++) {
-				//Get the user (x, y) coordinates for the oldest and newest for each dimension
-				double oldestUserComponent = oldestUserVector[dimension];
-				double oldestUserComponentX = cos(oldestUserComponent * TWO_PI);
-				double oldestUserComponentY = sin(oldestUserComponent * TWO_PI);
-
-				double newUserComponent = newUserVector[dimension];
-				double newUserComponentX = cos(newUserComponent * TWO_PI);
-				double newUserComponentY = sin(newUserComponent * TWO_PI);
-
-				averageUserX[dimension] += (newUserComponentX - oldestUserComponentX) / repulsionSampleSize;
-				averageUserY[dimension] += (newUserComponentY - oldestUserComponentY) / repulsionSampleSize;
-
-				//Get the movie rating (x, y) coordinates for the oldest and the newest for each dimension
-				double oldestMovieRatingComponent = oldestMovieRatingVector[dimension];
-				double oldestMovieRatingComponentX = cos(oldestMovieRatingComponent * TWO_PI);
-				double oldestMovieRatingComponentY = sin(oldestMovieRatingComponent * TWO_PI);
-
-				double newMovieRatingComponent = newMovieRatingVector[dimension];
-				double newMovieRatingComponentX = cos(newMovieRatingComponent * TWO_PI);
-				double newMovieRatingComponentY = sin(newMovieRatingComponent * TWO_PI);
-
-				averageMovieRatingX[dimension] += (newMovieRatingComponentX - oldestMovieRatingComponentX) / repulsionSampleSize;
-				averageMovieRatingY[dimension] += (newMovieRatingComponentY - oldestMovieRatingComponentY) / repulsionSampleSize;
-			}
-
-			//Replace the oldest ones in the sample with the new ones
-			userRepulsionSample[oldestSampleIdx] = newUserDataIdx;
-			movieRatingRepulsionSample[oldestSampleIdx] = newMovieRatingDataIdx;
-
-
 
 			//----------new---
 			//repel a user from a random user and 
@@ -469,15 +345,9 @@ int main(int argc, char *argv[]) {
 				randomUserVec2, //new for user-random-user repel
 				randomMRVec2, //new for mr-random-mr repel
 				dimensions,
-				averageMovieRatingX,
-				averageMovieRatingY,
-				averageUserX,
-				averageUserY,
 				etaInitial,
 				userEta,
 				movieRatingEta,
-				randomUserEta,
-				randomMREta,
 				z,
 				scalingFactor);
 
@@ -491,10 +361,10 @@ int main(int argc, char *argv[]) {
 			newMovieRatingVector = movieRatingVectors[dataPt[MOVIE_ID_IDX] - 1][dataPt[MOVIE_RATING_IDX] - 1];
 
 			//Recalculate z based on the average
-			double oldestZVal = zValues[oldestSampleIdx];
+			double oldestZVal = zValues[oldestIdx];
 			double newZVal = exp(-getDistanceSquared(newUserVector, newMovieRatingVector, dimensions));
 			z = z + (newZVal - oldestZVal) / repulsionSampleSize;
-			zValues[oldestSampleIdx] = newZVal;
+			zValues[oldestIdx] = newZVal;
 
 			if (dataIdx % reportNum == 0) { //Print out Z and the percentage completed of the iteration
 				double perc = (double) dataIdx / trainSize * 100;
@@ -628,8 +498,8 @@ int main(int argc, char *argv[]) {
 			}
 
 			//Move to the next oldest for the samples
-			oldestSampleIdx++;
-			oldestSampleIdx %= repulsionSampleSize;
+			oldestIdx++;
+			oldestIdx %= repulsionSampleSize;
 		}
 
 		//Find the RMSE after each iteration to see if it is improving
@@ -992,15 +862,9 @@ void moveVectors(
 	double *randomUserVec2, //new param for user-random-user repel
 	double *randomMRVec2, //new param for MR-random-MR repel
 	int dimensions,
-	double *averageMovieRatingX,
-	double *averageMovieRatingY,
-	double *averageUserX,
-	double *averageUserY,
 	double etaInitial,
 	double userEta,
 	double movieRatingEta,
-	double randomUserEta,
-	double randomMREta,
 	double z,
 	double scalingFactor) {
 	
@@ -1010,57 +874,30 @@ void moveVectors(
 		double userPt = userVector[dimension];
 		double movieRatingPt = movieRatingVector[dimension];
 
+		//Get the components for the user-mr and mr-user repulsion
 		double newUserComponent = newUserVector[dimension];
 		double newMovieRatingComponent = newMovieRatingVector[dimension];
 
-		//Get/calculate what we need for repulsion from the average
-		//double averageMovieRatingXComponent = averageMovieRatingX[dimension];
-		//double averageMovieRatingYComponent = averageMovieRatingY[dimension];
+		//Get the components for the user-user and mr-mr repulsion
+		double newUserComponent2 = randomUserVec2[dimension];
+		double newMRComponent2 = randomMRVec2[dimension];
 
-		//Ang is just the value of the average from [0, 1)
-		//Radius is how far the average is from zero
-		//double averageMovieRatingAng = fmod(atan2(averageMovieRatingYComponent, averageMovieRatingXComponent) / TWO_PI + VECTOR_MAX_SIZE, VECTOR_MAX_SIZE);
-		//double averageMovieRatingRadius = sqrt(pow(averageMovieRatingXComponent, 2) + pow(averageMovieRatingYComponent, 2));
-
-		//double userRepulsionConst = userEta * averageMovieRatingRadius * exp(-getDistanceSquared(userPt, averageMovieRatingAng)) / z;
-		double newUserPt = attract(userPt, movieRatingPt, userEta, scalingFactor); // / (1 + userRepulsionConst)); //Move userPt toward movieRatingPt
-		newUserPt = repel(newUserPt, newMovieRatingComponent, userEta, scalingFactor); //, userRepulsionConst);
-		//attract(newUserPt, fmod(averageMovieRatingAng + VECTOR_MAX_SIZE / 2, VECTOR_MAX_SIZE), userRepulsionConst); //Move userPt away from average movie rating
-
-		newUserPt = repel(newUserPt, *randomUserVec2, randomUserEta, scalingFactor); //new user-randomuser repel
+		//Move the user towards the mr, away from a random mr, and away from a random user
+		double newUserPt = attract(userPt, movieRatingPt, userEta, scalingFactor);
+		newUserPt = repel(newUserPt, newMovieRatingComponent, userEta, z, scalingFactor);
+		newUserPt = repel(newUserPt, newUserComponent2, userEta, z, scalingFactor); //new user-randomuser repel
 		// ---- > randomUserEta, userEta
 
-		//Get/calculate what we need for repulsion from the average
-		//double averageUserXComponent = averageUserX[dimension];
-		//double averageUserYComponent = averageUserY[dimension];
-
-		//Ang is just the value of the average from [0, 1)
-		//Radius is how far the average is from zero
-		//double averageUserAng = fmod(atan2(averageUserYComponent, averageUserXComponent) / TWO_PI + VECTOR_MAX_SIZE, VECTOR_MAX_SIZE);
-		//double averageUserRadius = sqrt(pow(averageUserXComponent, 2) + pow(averageUserYComponent, 2));
-
-		//Move the movie rating toward the user
-		//double movieRatingRepulsionConst = movieRatingEta * averageUserRadius * exp(-getDistanceSquared(averageUserAng, movieRatingPt)) / z;
-		double newMovieRatingPt = attract(movieRatingPt, userPt, movieRatingEta, scalingFactor); // / (1 + movieRatingRepulsionConst)); //Move movieRatingPt toward userPt
-		newMovieRatingPt = repel(newMovieRatingPt, newUserComponent, movieRatingEta, scalingFactor); //, movieRatingRepulsionConst);
-		//attract(newMovieRatingPt, fmod(averageUserAng + VECTOR_MAX_SIZE / 2, VECTOR_MAX_SIZE), movieRatingRepulsionConst); //Move movieRatingPt away from the average user
-
-		newMovieRatingPt = repel(newMovieRatingPt, *randomMRVec2, randomMREta, scalingFactor);//new movie-random repel
+		//Move the mr towards the user, away from a random user, and away from a random mr
+		double newMovieRatingPt = attract(movieRatingPt, userPt, movieRatingEta, scalingFactor);
+		newMovieRatingPt = repel(newMovieRatingPt, newUserComponent, movieRatingEta, z, scalingFactor);
+		newMovieRatingPt = repel(newMovieRatingPt, newMRComponent2, movieRatingEta, z, scalingFactor);//new movie-random repel
 		// ----> movieRatingEta ? randomMReta??
 
 		//Set the components back into their vectors
 		userVector[dimension] = newUserPt;
 		movieRatingVector[dimension] = newMovieRatingPt;
 	}
-
-	//Repel the random vectors chosen earlier away from each other
-	/* for (int dimension = 0; dimension < dimensions; dimension++) {
-		double randomUserComponent = newUserVector[dimension];
-		double randomMRComponent = newMovieRatingVector[dimension];
-		
-		newUserVector[dimension] = repel(randomUserComponent, randomMRComponent, randomUserEta);
-		newMovieRatingVector[dimension] = repel(randomMRComponent, randomUserComponent, randomMREta);
-	} */
 }
 
 /**
@@ -1079,7 +916,8 @@ double attract(double a, double b, double c, double scalingFactor) {
  * Repel just attracts the vector to the opposite of the other vector
  * @return the value of a after being repelled from b
  */
-double repel(double a, double b, double c, double scalingFactor) {
+double repel(double a, double b, double c, double z, double scalingFactor) {
+	c = c * exp(-getDistanceSquared(a, b) / z);
 	return attract(a, mod(b + VECTOR_HALF_SIZE, VECTOR_MAX_SIZE), c, scalingFactor);
 }
 
