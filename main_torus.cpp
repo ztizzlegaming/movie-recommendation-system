@@ -88,8 +88,7 @@ struct Vectors generateVectors(
 	int numDataPoints,
 	int maxUserId,
 	int maxMovieId,
-	int dimensions,
-	double scalingFactor);
+	int dimensions);
 struct Datasets splitDatasets(int* dataIndices, int numDataPoints);
 int* generateSet(int* dataIndices, int startIdx, int endIdx);
 struct ZValues calculateInitialZ(
@@ -101,7 +100,8 @@ struct ZValues calculateInitialZ(
 	mt19937 random,
 	uniform_int_distribution<int> randomDataPoint,
 	int sampleSize,
-	int dimensions);
+	int dimensions,
+	double scalingFactor);
 void moveVectors(
 	double *userVector,
 	double *movieRatingVector,
@@ -132,7 +132,8 @@ double calculateRMSE(
 	double** userVectors,
 	double*** movieRatingVectors,
 	int** movieRatingCounts,
-	int dimensions);
+	int dimensions,
+	double scalingFactor);
 double calculateRMSEEmpirical(
 	int* evaluationIndices,
 	int evaluationSize,
@@ -176,6 +177,9 @@ const double TEST_SIZE = 1 - TRAIN_SIZE - VALIDATION_SIZE;
 const int AVERAGE_SAMPLE_SIZE = 10000;
 
 int main(int argc, char *argv[]) {
+	//Seed general random number generator
+	srand(time(0));
+
 	char *settingsFile = (char *) "C:\\input.txt";
 	if (argc > 1) { //The first command-line argument is the name of the program
 		settingsFile = argv[1];
@@ -204,7 +208,10 @@ int main(int argc, char *argv[]) {
 
 	//TODO calculate this scaling factor based on the number of dimensions
 	//Something like 1 / sqrt(dimensions)
-	double scalingFactor = 1;
+	double scalingFactor = 50 / (double) dimensions;
+	scalingFactor = scalingFactor * scalingFactor; //squared
+
+	cout << "Scaling: " << scalingFactor << endl;
 
 	cout << "Reading in data" << endl;
 
@@ -220,7 +227,7 @@ int main(int argc, char *argv[]) {
 	cout << "Initializing vectors" << endl;
 
 	//Generate the vectors
-	struct Vectors vectors = generateVectors(data, numDataPoints, maxUserId, maxMovieId, dimensions, scalingFactor);
+	struct Vectors vectors = generateVectors(data, numDataPoints, maxUserId, maxMovieId, dimensions);
 	
 	//Get the vector and count arrays from the struct
 	double** userVectors = vectors.userVectors;
@@ -270,7 +277,8 @@ int main(int argc, char *argv[]) {
 		random,
 		randomDataPoint,
 		repulsionSampleSize, //TODO for now just use repulsion sample size for z sample size too
-		dimensions);
+		dimensions,
+		scalingFactor);
 	double z = zStruct.z;
 	double* zValues = zStruct.zValues;
 	int oldestIdx = 0;
@@ -371,7 +379,7 @@ int main(int argc, char *argv[]) {
 
 			//Recalculate z based on the average
 			double oldestZVal = zValues[oldestIdx];
-			double newZVal = exp(-getDistanceSquared(newUserVector, newMovieRatingVector, dimensions));
+			double newZVal = exp(-scalingFactor * getDistanceSquared(newUserVector, newMovieRatingVector, dimensions));
 			z = z + (newZVal - oldestZVal) / repulsionSampleSize;
 			zValues[oldestIdx] = newZVal;
 
@@ -499,7 +507,7 @@ int main(int argc, char *argv[]) {
 					double userPBar = (double) userCounts[userId - 1] / numDataPoints;
 					double mrPBar = (double) movieRatingCounts[movieId - 1][movieRating - 1] / numDataPoints;
 
-					double likelihood = userPBar * mrPBar * exp(-getDistanceSquared(userVec, mrVec, dimensions)) / z;
+					double likelihood = userPBar * mrPBar * exp(-scalingFactor * getDistanceSquared(userVec, mrVec, dimensions)) / z;
 					likelihoodAvg += likelihood;
 				}
 				likelihoodAvg /= AVERAGE_SAMPLE_SIZE;
@@ -519,7 +527,8 @@ int main(int argc, char *argv[]) {
 			userVectors,
 			movieRatingVectors,
 			movieRatingCounts,
-			dimensions);
+			dimensions,
+			scalingFactor);
 		cout << "Model_RMSE: " << rmse << endl;
 	}
 
@@ -655,8 +664,7 @@ struct Vectors generateVectors(
 	int numDataPoints,
 	int maxUserId,
 	int maxMovieId,
-	int dimensions,
-	double scalingFactor) {
+	int dimensions) {
 
 	//Initialize random number generators
 	mt19937 random(time(0));
@@ -711,7 +719,7 @@ struct Vectors generateVectors(
 
 			userVectors[userId - 1] = new double[dimensions];
 			for (int dimension = 0; dimension < dimensions; dimension++) {
-				double d = randomDouble(random) / scalingFactor;
+				double d = randomDouble(random);
 				userVectors[userId- 1][dimension] = d;
 			}
 		}
@@ -726,7 +734,7 @@ struct Vectors generateVectors(
 			for (int star = 0; star < MAX_STARS; star++) {
 				movieRatingVectors[movieId - 1][star] = new double[dimensions];
 				for (int dimension = 0; dimension < dimensions; dimension++) {
-					double d = randomDouble(random) / scalingFactor;
+					double d = randomDouble(random);
 					movieRatingVectors[movieId - 1][star][dimension] = d;
 				}
 			}
@@ -825,7 +833,8 @@ struct ZValues calculateInitialZ(
 	mt19937 random,
 	uniform_int_distribution<int> randomDataPoint,
 	int sampleSize,
-	int dimensions) {
+	int dimensions,
+	double scalingFactor) {
 
 	double z = 0;
 	double *zValues = new double[sampleSize];
@@ -847,7 +856,7 @@ struct ZValues calculateInitialZ(
 		int movieRating = mrSampleDataPt[MOVIE_RATING_IDX];
 		double *mrVec = movieRatingVectors[movieId - 1][movieRating - 1];
 
-		double zVal = exp(-getDistanceSquared(userVec, mrVec, dimensions));
+		double zVal = exp(-scalingFactor * getDistanceSquared(userVec, mrVec, dimensions));
 
 		z += zVal;
 		zValues[i1] = zVal;
@@ -913,12 +922,15 @@ void moveVectors(
 * @return The value of a after being attracted to b
 */
 double attract(double a, double b, double c, double scalingFactor) {
+	//Multiply scaling factor into the step size
+	c *= scalingFactor;
+
 	double r = a - c * (a - b);
 	if (abs(a - b) > VECTOR_HALF_SIZE) {
 		r += c * sign(a - b);
 	}
 
-	return mod(r, VECTOR_MAX_SIZE) * scalingFactor;
+	return mod(r, VECTOR_MAX_SIZE);
 }
 
 /**
@@ -926,7 +938,7 @@ double attract(double a, double b, double c, double scalingFactor) {
  * @return the value of a after being repelled from b
  */
 double repel(double a, double b, double c, double z, double scalingFactor) {
-	c = c * exp(-getDistanceSquared(a, b) / z);
+	c = c * exp(-scalingFactor * getDistanceSquared(a, b) / z);
 	return attract(a, mod(b + VECTOR_HALF_SIZE, VECTOR_MAX_SIZE), c, scalingFactor);
 }
 
@@ -1051,7 +1063,8 @@ double calculateRMSE(
 	double** userVectors,
 	double*** movieRatingVectors,
 	int** movieRatingCounts,
-	int dimensions) {
+	int dimensions,
+	double scalingFactor) {
 
 	//Calculate the score on the validation set
 	random_shuffle(&evaluationIndices[0], &evaluationIndices[evaluationSize - 1]);
@@ -1079,7 +1092,7 @@ double calculateRMSE(
 			double *movieRatingVector = movieVectors[star];
 			double d2 = getDistanceSquared(userVector, movieRatingVector, dimensions);
 
-			double p = exp(-d2) * movieRatingCounts[movieId - 1][star];
+			double p = exp(-scalingFactor * d2) * movieRatingCounts[movieId - 1][star];
 
 			avgStar += (star + 1) * p;
 			pTotal += p;
