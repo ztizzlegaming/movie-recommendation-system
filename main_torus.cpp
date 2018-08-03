@@ -111,6 +111,8 @@ void moveVectors(
 	double userEta,
 	double mrEta,
 	double z,
+	double euu,
+	double emrmr,
 	double scalingFactor);
 double attract(double a, double b, double c, double scalingFactor);
 double sign(double num);
@@ -274,6 +276,49 @@ int main(int argc, char *argv[]) {
 	double* zValues = zStruct.zValues;
 	int oldestIdx = 0;
 
+	//Calculate average value of exp[-d2(u, u)] and exp[-d2(mr, mr)]
+	double euu = 0;
+	double* euuValues = new double[Z_SAMPLE_SIZE];
+	double emrmr = 0;
+	double* emrmrValues = new double[Z_SAMPLE_SIZE];
+
+	for (int i1 = 0; i1 < Z_SAMPLE_SIZE; i1++) {
+		int user1Idx = trainIndices[randomDataPoint(random)];
+		int* user1DataPt = data[user1Idx];
+		int user1Id = user1DataPt[USER_ID_IDX];
+		double* user1Vector = userVectors[user1Id - 1];
+
+		int user2Idx = trainIndices[randomDataPoint(random)];
+		int* user2DataPt = data[user2Idx];
+		int user2Id = user2DataPt[USER_ID_IDX];
+		double* user2Vector = userVectors[user2Id - 1];
+
+		double euuVal = exp(scalingFactor * -getDistanceSquared(user1Vector, user2Vector, dimensions));
+
+		euu += euuVal;
+		euuValues[i1] = euuVal;
+
+		int mr1Idx = trainIndices[randomDataPoint(random)];
+		int* mr1DataPt = data[mr1Idx];
+		int movie1Id = mr1DataPt[MOVIE_ID_IDX];
+		int movie1Rating = mr1DataPt[MOVIE_RATING_IDX];
+		double* mr1Vector = movieRatingVectors[movie1Id - 1][movie1Rating - 1];
+
+		int mr2Idx = trainIndices[randomDataPoint(random)];
+		int* mr2DataPt = data[mr2Idx];
+		int movie2Id = mr2DataPt[MOVIE_ID_IDX];
+		int movie2Rating = mr2DataPt[MOVIE_RATING_IDX];
+		double* mr2Vector = movieRatingVectors[movie2Id - 1][movie2Rating - 1];
+
+		double emrmrVal = exp(scalingFactor * -getDistanceSquared(mr1Vector, mr2Vector, dimensions));
+
+		emrmr += euuVal;
+		emrmrValues[i1] = emrmrVal;
+	}
+
+	euu /= Z_SAMPLE_SIZE;
+	emrmr /= Z_SAMPLE_SIZE;
+
 	//Save the initial z in case we need to use it later, and print it out
 	double initialZ = z;
 	cout << "Initial z: " << z << endl;
@@ -357,6 +402,8 @@ int main(int argc, char *argv[]) {
 				userEta,
 				movieRatingEta,
 				z,
+				euu,
+				emrmr,
 				scalingFactor);
 
 			//Select new random user and mr vectors for the z calculation
@@ -373,6 +420,50 @@ int main(int argc, char *argv[]) {
 			double newZVal = exp(-scalingFactor * getDistanceSquared(newUserVector, newMovieRatingVector, dimensions));
 			z = z + (newZVal - oldestZVal) / Z_SAMPLE_SIZE;
 			zValues[oldestIdx] = newZVal;
+
+			//Get random new vectors to update euu with
+			int randomUserDataIdx = randomDataPoint(random);
+			idx = trainIndices[randomUserDataIdx];
+			dataPt = data[idx];
+			randomUserId = dataPt[USER_ID_IDX];
+			double* randomUserVec1 = userVectors[randomUserId - 1];
+
+			randomUserDataIdx = randomDataPoint(random);
+			idx = trainIndices[randomUserDataIdx];
+			dataPt = data[idx];
+			randomUserId = dataPt[USER_ID_IDX];
+			randomUserVec2 = userVectors[randomUserId - 1];
+			
+			//Update value of euu
+			double oldEuuVal = euuValues[oldestIdx];
+			double newEuuVal = exp(scalingFactor * -getDistanceSquared(randomUserVec1, randomUserVec2, dimensions));
+
+			euuValues[oldestIdx] = newEuuVal;
+
+			euu += (newEuuVal - oldEuuVal) / Z_SAMPLE_SIZE;
+
+			//Get random new vectors to update emrmr with
+			int randomMRDataIdx = randomDataPoint(random);
+			idx = trainIndices[randomMRDataIdx];
+			dataPt = data[idx];
+			randomMovieId = dataPt[MOVIE_ID_IDX];
+			randomMovieRating = dataPt[MOVIE_RATING_IDX];
+			double* randomMRVec1 = movieRatingVectors[randomMovieId - 1][randomMovieRating - 1];
+
+			randomMRDataIdx = randomDataPoint(random);
+			idx = trainIndices[randomMRDataIdx];
+			dataPt = data[idx];
+			randomMovieId = dataPt[MOVIE_ID_IDX];
+			randomMovieRating = dataPt[MOVIE_RATING_IDX];
+			randomMRVec2 = movieRatingVectors[randomMovieId - 1][randomMovieRating - 1];
+
+			//Update value of emrmr
+			double oldEmrmrVal = emrmrValues[oldestIdx];
+			double newEmrmrVal = exp(scalingFactor * -getDistanceSquared(randomMRVec1, randomMRVec2, dimensions));
+
+			emrmrValues[oldestIdx] = newEmrmrVal;
+
+			emrmr += (newEmrmrVal - oldEmrmrVal) / Z_SAMPLE_SIZE;
 
 			if (dataIdx % reportNum == 0) { //Print out Z and the percentage completed of the iteration
 				double perc = (double) dataIdx / trainSize * 100;
@@ -868,6 +959,8 @@ void moveVectors(
 	double userEta,
 	double movieRatingEta,
 	double z,
+	double euu,
+	double emrmr,
 	double scalingFactor) {
 	
 	//Go through each dimension of the vector
@@ -887,13 +980,13 @@ void moveVectors(
 		//Move the user towards the mr, away from a random mr, and away from a random user
 		double newUserPt = attract(userPt, movieRatingPt, userEta, scalingFactor);
 		newUserPt = repel(newUserPt, newMovieRatingComponent, userEta, z, scalingFactor);
-		newUserPt = repel(newUserPt, newUserComponent2, userEta, z, scalingFactor); //new user-randomuser repel
+		newUserPt = repel(newUserPt, newUserComponent2, userEta, euu, scalingFactor); //new user-randomuser repel
 		// ---- > randomUserEta, userEta
 
 		//Move the mr towards the user, away from a random user, and away from a random mr
 		double newMovieRatingPt = attract(movieRatingPt, userPt, movieRatingEta, scalingFactor);
 		newMovieRatingPt = repel(newMovieRatingPt, newUserComponent, movieRatingEta, z, scalingFactor);
-		newMovieRatingPt = repel(newMovieRatingPt, newMRComponent2, movieRatingEta, z, scalingFactor);//new movie-random repel
+		newMovieRatingPt = repel(newMovieRatingPt, newMRComponent2, movieRatingEta, emrmr, scalingFactor);//new movie-random repel
 		// ----> movieRatingEta ? randomMReta??
 
 		//Set the components back into their vectors
