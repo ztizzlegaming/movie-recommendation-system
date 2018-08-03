@@ -749,7 +749,7 @@ struct Vectors generateVectors(
  */
 struct Datasets splitDatasets(int* dataIndices, int numDataPoints) {
 	//Shuffle the data indices
-	random_shuffle(&dataIndices[0], &dataIndices[numDataPoints - 1]); //dataIndices.begin(), dataIndices.end());
+	random_shuffle(&dataIndices[0], &dataIndices[numDataPoints - 1]);
 
 	//Split up the data into training, validation, and test sets
 	int trainIdxStart = 0;
@@ -825,7 +825,6 @@ struct ZValues calculateInitialZ(
 	double *zValues = new double[sampleSize];
 
 	//Random shuffle for sample for dist2
-	//random_shuffle(trainIndices.begin(), trainIndices.end());
 	random_shuffle(&trainIndices[0], &trainIndices[trainSize - 1]);
 
 	//Go through samples and calculate z and dist2
