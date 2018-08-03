@@ -33,9 +33,6 @@ struct Settings {
 	int phiUser;
 	int phiMR;
 	int iterations;
-	//int zSampleSize;
-	int repulsionSampleSize;
-	int scoreSampleSize;
 };
 
 //Struct to hold data read from binary file
@@ -121,9 +118,6 @@ double repel(double a, double b, double c, double z, double scalingFactor);
 double mod(double a, double b);
 double getDistanceSquared(double a, double b);
 double getDistanceSquared(double *a, double *b, int dimensions);
-double *averageTorusSampleToXY(double *sample, int sampleSize);
-double getAvgAngForRepulsion(double *sample, int sampleSize);
-double getAvgMagnitudeForRepulsion(double *sample, int sampleSize);
 double calculateEta(double etaInitial, double phi, int count);
 double calculateRMSE(
 	int* evaluationIndices,
@@ -174,6 +168,7 @@ const double VALIDATION_SIZE = 0.1;
 const double TEST_SIZE = 1 - TRAIN_SIZE - VALIDATION_SIZE;
 
 //Sample size to calculate distances, likelihood, etc.
+const int Z_SAMPLE_SIZE = 10000;
 const int AVERAGE_SAMPLE_SIZE = 10000;
 
 int main(int argc, char *argv[]) {
@@ -203,16 +198,12 @@ int main(int argc, char *argv[]) {
 	//Pull out a few settings out of the struct since they are used a lot
 	int dimensions = settings.dimensions;
 	double etaInitial = settings.eta;
-	int repulsionSampleSize = settings.repulsionSampleSize;
-	int scoreSampleSize = settings.scoreSampleSize;
 
-	//TODO calculate this scaling factor based on the number of dimensions
-	//Something like 1 / sqrt(dimensions)
+	//Scaling factor to limit the total volume of the torus
 	double scalingFactor = 50 / (double) dimensions;
 	scalingFactor = scalingFactor * scalingFactor; //squared
 
 	cout << "Scaling: " << scalingFactor << endl;
-
 	cout << "Reading in data" << endl;
 
 	//Read in the data points from the binary file
@@ -276,7 +267,7 @@ int main(int argc, char *argv[]) {
 		movieRatingVectors,
 		random,
 		randomDataPoint,
-		repulsionSampleSize, //TODO for now just use repulsion sample size for z sample size too
+		Z_SAMPLE_SIZE,
 		dimensions,
 		scalingFactor);
 	double z = zStruct.z;
@@ -380,7 +371,7 @@ int main(int argc, char *argv[]) {
 			//Recalculate z based on the average
 			double oldestZVal = zValues[oldestIdx];
 			double newZVal = exp(-scalingFactor * getDistanceSquared(newUserVector, newMovieRatingVector, dimensions));
-			z = z + (newZVal - oldestZVal) / repulsionSampleSize;
+			z = z + (newZVal - oldestZVal) / Z_SAMPLE_SIZE;
 			zValues[oldestIdx] = newZVal;
 
 			if (dataIdx % reportNum == 0) { //Print out Z and the percentage completed of the iteration
@@ -516,7 +507,7 @@ int main(int argc, char *argv[]) {
 
 			//Move to the next oldest for the samples
 			oldestIdx++;
-			oldestIdx %= repulsionSampleSize;
+			oldestIdx %= Z_SAMPLE_SIZE;
 		}
 
 		//Find the RMSE after each iteration to see if it is improving
@@ -558,16 +549,12 @@ struct Settings readSettings(char* file) {
 	double phiUser;
 	double phiMR;
 	int iterations;
-	int repulsionSampleSize;
-	int scoreSampleSize;
 
 	settingsInput >> dimensions;
 	settingsInput >> etaInitial;
 	settingsInput >> phiUser;
 	settingsInput >> phiMR;
 	settingsInput >> iterations;
-	settingsInput >> repulsionSampleSize;
-	settingsInput >> scoreSampleSize;
 
 	settingsInput.close();
 
@@ -577,8 +564,6 @@ struct Settings readSettings(char* file) {
 	settings.phiUser = phiUser;
 	settings.phiMR = phiMR;
 	settings.iterations = iterations;
-	settings.repulsionSampleSize = repulsionSampleSize;
-	settings.scoreSampleSize = scoreSampleSize;
 
 	return settings;
 }
@@ -985,57 +970,6 @@ double getDistanceSquared(double *a, double *b, int dimensions) {
 	}
 
 	return sum;
-}
-
-/**
- * Helper function to generate average (x, y) value for a sample of points on the torus
- */
-double* averageTorusSampleToXY(double *sample, int sampleSize) {
-	double x = 0, y = 0;
-
-	for (int i1 = 0; i1 < sampleSize; i1++) {
-		double pt = sample[i1];
-		x += cos(TWO_PI * pt);
-		y += sin(TWO_PI * pt);
-	}
-
-	x /= sampleSize;
-	y /= sampleSize;
-
-	double *result = new double[2];
-	result[0] = x;
-	result[1] = y;
-
-	return result;
-}
-
-/**
- * @return The angle of the vector of the average of a sample of points on the torus. Between 0 and 1.
- */
-double getAvgAngForRepulsion(double *sample, int sampleSize) {
-	double *avg = averageTorusSampleToXY(sample, sampleSize);
-	double x = avg[0], y = avg[1];
-
-	double result = atan2(y, x) / TWO_PI;
-	result = fmod(result + VECTOR_MAX_SIZE, VECTOR_MAX_SIZE);
-
-	return result;
-}
-
-/**
- * @return The magnitude of the vector of the average of a sample of points on the torus. Between 0 and 1.
- */
-double getAvgMagnitudeForRepulsion(double *sample, int sampleSize) {
-	double *avg = averageTorusSampleToXY(sample, sampleSize);
-	double x = avg[0], y = avg[1];
-
-	double result = sqrt(x * x + y * y);
-
-	if (result != result) {
-		return 0;
-	}
-
-	return result;
 }
 
 /**
