@@ -1,16 +1,32 @@
-# Netflix Prize 
-## Dr. Michael Lamar, Jordan Turley, Zeyang Huang
+# Movie Recommendation System
+## Dr. Michael Lamar, Zeyang Huang, Jordan Turley
 ### Overview
 
-This project proves a machine learning implementation to the [Netflix Prize](https://en.wikipedia.org/wiki/Netflix_Prize), a competition by Netflix from 2006 to 2009 allowing anyone to develop an algorithm for predicting user ratings for films.
+We developed and implemented a recommender system for movies. We developed a co-occurrence statistical learning algorithm trained and evaluated on the [Netflix Prize](https://en.wikipedia.org/wiki/Netflix_Prize) dataset. The Netflix Prize was a competition hosted by Netflix from 2006 to 2009 allowing anyone to develop an algorithm for predicting user ratings for films. Our algorithm is based on the [Co-Occurrence Data Embedding](http://www.jmlr.org/papers/volume8/globerson07a/globerson07a.pdf) algorithm.
 
-Our implementation takes a genetic or biological approach to solve this problem. We begin by creating a random vector for each user and each movie-rating (each movie has five possible ratings, so each movie gets five vectors). We put these vectors on a high dimensional unit sphere. We go through each user-movie-rating pair and attract the two closer together. We also repel these vectors away from random vectors. The user vector is repelled from a given number of random movie-rating vectors, and the movie-rating vector is repelled from a random number of user vectors. Then, the user vector is repelled from a random user vector, and the movie-rating vector is repelled from a random movie-rating vector.
+Our implementation takes a genetic or biological approach to solve this problem. We begin by creating a random vector for each user and each movie-rating (each movie has five possible ratings, so each movie gets five vectors).  We put these vectors on a high dimensional unit sphere or torus. One can basically think of putting a random point on a ball, like a basketball or a soccer ball. We go through each user-movie-rating pair and attract the two closer together. We also repel these vectors away from random vectors to avoid all vectors converging to the same point. The user vector is repelled from a given number of random movie-rating vectors, and the movie-rating vector is repelled from a random number of user vectors. Then, the user vector is repelled from a random user vector, and the movie-rating vector is repelled from a random movie-rating vector.
+
+A visual example of this is shown below:
+
+![Image of sphere and torus](https://i.imgur.com/uku07zv.png)
+
+### Evaluation
 
 The dataset is divided randomly into three sets: training, validation, and test. The training set is used for training, the validation set is used to tune our hyperparameters, and the test set will be used to find our final performance rating for the model.
 
 The probability is calculated for each movie-rating and the expected value is calculated, which is our final prediction. The mean squared error is calculated to see how well our algorithm is doing. Currently, the best RMSE we have achieved is 0.943463.
 
-## How to use
+Below, we see a real example of our algorithm learning a user's movie preferences. We selected a user that gave the movie "The Empire Strikes Back" a rating of 3. On the left is the predictions of the algorithm with no training, and on the right is the predictions after several iterations of training. Our algorithm begins predicting very close to the marginal distributions since the initialization is random, but after training, our algorithm learns that the user would likely give this movie a lower rating. The learning isn't perfect, but we do much better than we would do by predicting the marginal distribution. The video can be seen [here](https://www.youtube.com/watch?v=LKXTo59pt-w) or the start and finish can be seen below:
+
+![Image of learning](https://i.imgur.com/4YUc3lM.png)
+
+### Poster
+
+We presented a poster at the 2019 Joint Math Meetings in Baltimore, MD. The full resolution poster is [here](https://github.com/ztizzlegaming/netflix-prize/blob/master/poster.pdf).
+
+![Image of poster](https://i.imgur.com/9cTrE8K.png)
+
+### How to use
 First, clone this repository using the following code:
 ```
 git clone https://github.com/ztizzlegaming/netflix-prize
@@ -30,7 +46,7 @@ The first argument is the input file. The second is the dataset. The third is th
 
 When using the entire dataset, the program uses about 4.5 GB of RAM and takes about 20 minutes for each iteration.
 
-## Input File
+### Input File
 The input file is simply a text file which is used for configuring several of the hyperparameters used in the model.
 
 dimensions  
